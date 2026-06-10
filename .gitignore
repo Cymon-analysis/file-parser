@@ -1,0 +1,13 @@
+# Données locales : ne jamais publier les fichiers d'entreprise
+sources_brutes/
+sources_normalisees/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Divers
+.DS_Store
+Thumbs.db
