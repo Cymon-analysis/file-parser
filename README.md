@@ -1,89 +1,64 @@
-# Normaliseur de fichiers pour IA (NotebookLM)
+# File Parser — Normalisation & Cadrage Analytics Engineering
 
-Transforme un dossier de fichiers hétérogènes (`sources_brutes/`) en fichiers
-texte et CSV standardisés UTF-8 (`sources_normalisees/`), lisibles sans
-ambiguïté par une IA comme NotebookLM.
+Outil en deux parties pour les missions de Data / Analytics Engineering :
 
-**Règle générale : 1 fichier en entrée → 1 fichier en sortie** (découpé en
-plusieurs parties uniquement s'il dépasse la limite de mots de NotebookLM).
+1. **Normalisation** (`normaliser.py`) — transforme des fichiers hétérogènes
+   (`sources_brutes/`) en TXT/CSV UTF-8 (`output_normalise/`).
+2. **Cadrage v5** (`app.py`) — mode hybride + **mindmap interactive** (streamlit-vis-network).
 
 ## Prérequis
 
-- Windows, macOS ou Linux
-- [Python 3.10+](https://www.python.org/downloads/) — sous Windows :
-
-```powershell
-winget install Python.Python.3.12
-```
-
-(puis ouvrez un nouveau terminal pour que la commande `python` soit reconnue)
+- Python 3.10+
+- Clé API [Gemini](https://aistudio.google.com/apikey)
+- (Optionnel) `NOTION_TOKEN` + `NOTION_PAGE_ID` pour l'export Notion
+- (Optionnel) Drivers BDD : PostgreSQL, Snowflake ou BigQuery selon le dialecte
 
 ## Installation
 
 ```powershell
-git clone <URL_DU_DEPOT>
-cd file_parser
+git clone https://github.com/Cymon-analysis/file-parser.git
+cd file-parser
 pip install -r requirements.txt
 ```
 
-## Utilisation
-
-1. Créez un dossier `sources_brutes/` à la racine du projet (s'il n'existe pas).
-2. Déposez-y vos fichiers à convertir (les sous-dossiers sont parcourus).
-3. Lancez :
+## Étape A — Normaliser les fichiers
 
 ```powershell
 python normaliser.py
 ```
 
-4. Récupérez les fichiers convertis dans `sources_normalisees/` et importez-les
-   comme sources dans NotebookLM (ignorez `_MANIFEST.csv`, c'est le journal des
-   conversions).
-
-### Options
+## Étape B — Application de cadrage (v5)
 
 ```powershell
-python normaliser.py --entree mon_dossier --sortie mon_dossier_normalise
-python normaliser.py --max-mots 200000   # seuil de découpage (0 = désactivé)
+pip install streamlit-vis-network
+$env:GEMINI_API_KEY = "votre_cle_api"
+streamlit run app.py
 ```
 
-## Règles de conversion
+### Workflow en 4 étapes
 
-| Type d'entrée | Sortie |
-|---|---|
-| `.xlsx` `.xlsm` `.xls` | 1 feuille : un CSV UTF-8 ; plusieurs feuilles : un seul `.txt` avec chaque feuille au format CSV, délimitée par `>>> FEUILLE : nom` |
-| `.csv` `.tsv` | CSV ré-encodé UTF-8, séparateur normalisé en virgule |
-| `.pdf` | `.txt` avec texte extrait, page par page |
-| `.docx` | `.txt` avec titres (`#`), paragraphes et tableaux (`a \| b \| c`) |
-| `.pptx` | `.txt` avec texte par diapositive |
-| `.html` `.htm` | `.txt` sans balises |
-| `.sql` `.md` `.json` `.xml` `.yaml`, code (`.py`, `.js`, `.qvs`, ...) | `.txt` ré-encodé UTF-8 (`fichier__ext.txt`) |
-| `.zip` | un seul `.txt` consolidé, chaque fichier interne délimité par `>>> FICHIER : chemin` ; les binaires sont ignorés |
-| Autres extensions | Ignorées (listées dans le manifeste) |
+1. **Sources hybrides** — fichiers locaux +/ou DDL BDD (échantillons anonymisés)
+2. **Tokens & coût** — estimation Gemini
+3. **Mindmap interactive** — pré-analyse graphe JSON, édition drag-and-drop, ajout/suppression de relations
+4. **Livrable final** — génération Markdown basée sur le graphe validé + export Notion
 
-## Découpage automatique
+## Architecture modulaire
 
-NotebookLM accepte environ 500 000 mots par source. Tout fichier de sortie
-dépassant `--max-mots` (400 000 par défaut) est automatiquement découpé en
-plusieurs parties (`fichier_partie_1_sur_3.txt`, ...), avec coupes sur des
-lignes entières. Pour un CSV, la ligne d'en-tête est répétée dans chaque
-partie ; pour un `.txt`, chaque partie commence par un bandeau `PARTIE x / y`.
-
-## Sortie
-
-- Chaque fichier `.txt` commence par un en-tête de métadonnées (fichier source,
-  type d'origine, date de conversion).
-- Les noms de fichiers sont normalisés en ASCII minuscule (sans accents ni espaces).
-- Un fichier `_MANIFEST.csv` récapitule chaque conversion (source, catégorie,
-  statut, fichiers produits, erreur éventuelle).
-
-## Codes de retour
-
-- `0` : tout s'est bien passé
-- `1` : dossier d'entrée introuvable
-- `2` : au moins un fichier a provoqué une erreur (les autres sont quand même convertis)
+```
+cadrage/
+  config.py           # constantes
+  models.py           # SourceContexte
+  sampling.py         # Smart Sampling FinOps
+  sources_fichiers.py # scan output_normalise/
+  db_schema.py        # extraction DDL lecture seule
+  cache_semantique.py # cache MD5
+  prompts.py          # prompts Gemini enrichis
+  gemini_client.py    # API Gemini
+  mermaid_utils.py    # extraction diagramme
+  notion_export.py    # export Notion
+app.py                # interface Streamlit
+```
 
 ## Confidentialité
 
-Les dossiers `sources_brutes/` et `sources_normalisees/` sont exclus du dépôt
-via `.gitignore` : vos données ne sont jamais publiées, seul le code l'est.
+`sources_brutes/`, `output_normalise/` et `.cadrage_cache.json` sont exclus du dépôt.

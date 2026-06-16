@@ -4,7 +4,7 @@
 Normalisation de fichiers hétérogènes pour ingestion par une IA (ex. NotebookLM).
 
 Entrée  : dossier ./sources_brutes (par défaut)
-Sortie  : dossier ./sources_normalisees (par défaut)
+Sortie  : dossier ./output_normalise (par défaut)
 
 Règle générale : 1 fichier en entrée -> 1 fichier en sortie (.txt ou .csv UTF-8).
 
@@ -397,21 +397,47 @@ def normaliser_dossier(dossier_entree: Path, dossier_sortie: Path,
         return 1
 
     dossier_sortie.mkdir(parents=True, exist_ok=True)
+    dossier_travail = dossier_entree
+
+    try:
+        from cadrage.ingestion_archives import est_archive, est_fichier_fantome
+        from cadrage.ingestion_fichiers import pipeline_ingestion_locale
+
+        archives_presentes = any(
+            est_archive(p)
+            for p in dossier_entree.rglob("*")
+            if p.is_file() and not est_fichier_fantome(p)
+        )
+        if archives_presentes:
+            dossier_extrait = dossier_entree / "_extrait_archives"
+            print("Archives détectées — désarchivage récursif en cours...")
+            resultat = pipeline_ingestion_locale(dossier_entree, dossier_extrait)
+            print(resultat.arborescence)
+            if resultat.avertissements:
+                for msg in resultat.avertissements:
+                    print(f"  [AVERT ] {msg}")
+            dossier_travail = dossier_extrait
+    except ImportError:
+        pass
+
     manifeste: list[dict[str, str]] = []
     nb_ok = nb_ignores = nb_erreurs = 0
 
-    fichiers = sorted(p for p in dossier_entree.rglob("*") if p.is_file())
+    fichiers = sorted(
+        p for p in dossier_travail.rglob("*")
+        if p.is_file() and p.name != "_MANIFEST.csv"
+    )
     if not fichiers:
         print(f"Aucun fichier trouvé dans {dossier_entree}.")
         return 0
 
     print(f"Normalisation de {len(fichiers)} fichier(s) : "
-          f"{dossier_entree} -> {dossier_sortie}\n")
+          f"{dossier_travail} -> {dossier_sortie}\n")
 
     for fichier in fichiers:
         extension = fichier.suffix.lower()
         convertisseur, categorie = choisir_convertisseur(extension)
-        relatif = fichier.relative_to(dossier_entree)
+        relatif = fichier.relative_to(dossier_travail)
 
         if convertisseur is None:
             print(f"  [IGNORÉ ] {relatif} (extension non gérée : {extension or 'aucune'})")
@@ -458,8 +484,8 @@ def main() -> int:
         description="Normalise un dossier de fichiers hétérogènes en TXT/CSV UTF-8.")
     parseur.add_argument("--entree", default="sources_brutes",
                          help="Dossier d'entrée (défaut : sources_brutes)")
-    parseur.add_argument("--sortie", default="sources_normalisees",
-                         help="Dossier de sortie (défaut : sources_normalisees)")
+    parseur.add_argument("--sortie", default="output_normalise",
+                         help="Dossier de sortie (défaut : output_normalise)")
     parseur.add_argument("--max-mots", type=int, default=MAX_MOTS_DEFAUT,
                          help=f"Nombre maximal de mots par fichier de sortie avant "
                               f"découpage (défaut : {MAX_MOTS_DEFAUT} ; 0 = désactivé)")

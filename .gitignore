@@ -1,6 +1,15 @@
 # Données locales : ne jamais publier les fichiers d'entreprise
 sources_brutes/
+output_normalise/
 sources_normalisees/
+.cadrage_cache.json
+debug_prompt.txt
+.secrets/
+.ingestion_temp/
+
+# Credentials GCP / clés (ne jamais pousser)
+converteo-training-looker-*.json
+*credentials*.json
 
 # Python
 __pycache__/
